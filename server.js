@@ -86,7 +86,96 @@ async function authenticateSpotify() {
   }
 }
 
+async function getRandomArtist(genre) {
+  const getRandomLetter = () => {
+    const letters = 'abcdefghijklmnopqrstuvwxyz';
+    return letters[Math.floor(Math.random() * letters.length)];
+  };
 
+  try {
+    while (true) {
+      const searchResponse = await fetch(
+        `https://api.spotify.com/v1/search?q=${getRandomLetter()}&type=artist&limit=50`,
+        {
+          headers: {
+            'Authorization': `Bearer ${app.locals.spotifyToken}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      if (!searchResponse.ok) {
+        throw new Error(`HTTP error! status: ${searchResponse.status}`);
+      }
+
+      const searchData = await searchResponse.json();
+      
+      let popularArtists;
+      if (genre != null) {
+        popularArtists = searchData.artists.items.filter(artist => 
+          artist.popularity >= 75 && artist.genres.some(g => g.toLowerCase().includes(genre.toLowerCase())));
+      } else {
+        popularArtists = searchData.artists.items.filter(artist => artist.popularity >= 75);
+      }
+      
+      if (popularArtists.length > 0) {
+        const randomArtist = popularArtists[Math.floor(Math.random() * popularArtists.length)];
+        console.log(`Found artist: ${randomArtist.name} (popularity: ${randomArtist.popularity})`);
+        return randomArtist;
+      }
+    }
+  } catch (error) {
+    console.error("Error fetching random artist:", error);
+    return null;
+  }
+}
+
+async function getSong(artistId) {
+  try {
+    const tracksResponse = await fetch(
+      `https://api.spotify.com/v1/artists/${artistId}/top-tracks?market=US`,
+      {
+        headers: {
+          'Authorization': `Bearer ${app.locals.spotifyToken}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    if (!tracksResponse.ok) {
+      throw new Error(`HTTP error! status: ${tracksResponse.status}`);
+    }
+
+    const tracksData = await tracksResponse.json();
+    
+    if (tracksData.tracks.length > 0) {
+      return tracksData.tracks[0];
+    }
+    return null;
+  } catch (error) {
+    console.error("Error fetching artist's top track:", error);
+    return null;
+  }
+}
+
+async function getRandomSong() {
+  try {
+    const artist = await getRandomArtist();
+    if (!artist) {
+      throw new Error("Failed to find a random artist");
+    }
+
+    const song = await getSong(artist.id);
+    if (!song) {
+      throw new Error("Failed to find a song for the artist");
+    }
+
+    return song;
+  } catch (error) {
+    console.error("Error in getRandomSong:", error);
+    return null;
+  }
+}
 
 /**Other Shtuffs**/
 if (process.argv.length != 3) {
@@ -115,16 +204,72 @@ async function startServer() {
   app.locals.spotifyToken = spotifyToken;
 
   app.listen(portNumber, () => {
-    console.log(`Web server is running at http://localhost:${portNumber}/home`);
+    console.log(`Web server is running at http://localhost:${portNumber}/login`);
     
     promptUser();
   });
 }
 
 /**express shit**/
-app.get("/home", (req, res) => {
-  res.render('home');
-})
+app.get("/login", (req, res) => {
+  res.render('logIn');
+});
+
+app.post("/login", async (req, res) => {
+  const { username, password } = req.body;
+  
+  try {
+      const user = await db.collection('users').findOne({ username: username });
+      
+      if (!user) {
+          return res.render('logIn', { error: 'Invalid username or password' });
+      }
+      
+      if (password !== user.password) {
+          return res.render('logIn', { error: 'Invalid username or password' });
+      }
+      
+      res.redirect('/home');
+  } catch (error) {
+      console.error('Login error:', error);
+      res.render('logIn', { error: 'An error occurred during login' });
+  }
+});
+
+app.get("/signup", (req, res) => {
+  res.render('signUp');
+});
+
+app.post("/signup", async (req, res) => {
+  const { username, password, confirmPassword } = req.body;
+  
+  try {
+      if (password !== confirmPassword) {
+          return res.render('signUp', { error: 'Passwords do not match' });
+      }
+      const existingUser = await db.collection('users').findOne({ username: username });
+      if (existingUser) {
+          return res.render('signUp', { error: 'Username already exists' });
+      }
+      
+      await db.collection('users').insertOne({
+          username: username,
+          password: password,
+          playlist: [],
+          created_at: new Date()
+      });
+      
+      res.redirect('/login');
+  } catch (error) {
+      console.error('Signup error:', error);
+      res.render('signUp', { error: 'An error occurred during signup' });
+  }
+});
+
+app.get("/home", async (req, res) => {
+  const song = await getRandomSong("rnb");
+  res.render('home', { song: song });
+});
 
 /**FOR TESTING USE ONLY, we will build this and will not need to do this**/
 function promptUser() {
