@@ -16,9 +16,9 @@ const spotifyId = encodeURIComponent(process.env.SPOTIFY_CLIENT_ID);
 const spotifySecret = encodeURIComponent(process.env.SPOTIFY_CLIENT_SECRET);
 
 app.use(session({
-  secret: process.env.SESSION_SECRET,
+  secret: process.env.SESSION_SECRET || 'bca28e7f86a46dd7c04aad54cc181a0034324c2f5334d7fdf703c24384a97cd4',
   resave: false,
-  saveUninitialized: false,
+  saveUninitialized: true,
   cookie: { 
     secure: process.env.NODE_ENV === 'production',
     maxAge: 24 * 60 * 60 * 1000
