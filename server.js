@@ -7,6 +7,7 @@ const { MongoClient, ServerApiVersion } = require("mongodb");
 const { request } = require("http");
 const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
 const session = require('express-session');
+const MongoDBStore = require('connect-mongodb-session')(session);
 
 const username = encodeURIComponent(process.env.MONGO_DB_USERNAME);
 const password = encodeURIComponent(process.env.MONGO_DB_PASSWORD);
@@ -15,11 +16,22 @@ const uri = `mongodb+srv://${username}:${password}@cluster0.allbk.mongodb.net/?r
 const spotifyId = encodeURIComponent(process.env.SPOTIFY_CLIENT_ID);
 const spotifySecret = encodeURIComponent(process.env.SPOTIFY_CLIENT_SECRET);
 
+
+const store = new MongoDBStore({
+  uri: uri,
+  collection: 'sessions'
+});
+
+store.on('error', (error) => {
+  console.error('Session store error:', error);
+});
+
 app.use(session({
-  secret: process.env.SESSION_SECRET || 'bca28e7f86a46dd7c04aad54cc181a0034324c2f5334d7fdf703c24384a97cd4',
+  secret: process.env.SESSION_SECRET || 'default-secret',
   resave: false,
-  saveUninitialized: true,
-  cookie: { 
+  saveUninitialized: false,
+  store: store,
+  cookie: {
     secure: process.env.NODE_ENV === 'production',
     maxAge: 24 * 60 * 60 * 1000
   }
