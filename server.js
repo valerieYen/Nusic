@@ -235,6 +235,14 @@ async function getRandomSong() {
 
 
 /**express shit**/
+app.get("/", (req, res) => {
+  if (req.session.user) {
+    res.redirect('/discover');
+  } else {
+    res.redirect('/login');
+  }
+});
+
 app.get("/login", (req, res) => {
   res.render('logIn');
 });
