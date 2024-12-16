@@ -8,6 +8,7 @@ const { request } = require("http");
 const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
 const session = require('express-session');
 const MongoDBStore = require('connect-mongodb-session')(session);
+const cors = require('cors');
 
 const username = encodeURIComponent(process.env.MONGO_DB_USERNAME);
 const password = encodeURIComponent(process.env.MONGO_DB_PASSWORD);
@@ -22,6 +23,14 @@ const store = new MongoDBStore({
   collection: 'sessions'
 });
 
+store.on('connected', () => {
+  console.log('Session store connected');
+});
+
+store.on('disconnected', () => {
+  console.error('Session store disconnected');
+});
+
 store.on('error', (error) => {
   console.error('Session store error:', error);
 });
@@ -32,10 +41,27 @@ app.use(session({
   saveUninitialized: false,
   store: store,
   cookie: {
-    secure: process.env.NODE_ENV === 'production',
-    maxAge: 24 * 60 * 60 * 1000
-  }
+    secure: process.env.NODE_ENV === 'production', 
+    sameSite: 'lax',
+    httpOnly: true,
+    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+  },
+  name: 'sessionId', 
+  proxy: process.env.NODE_ENV === 'production' 
 }));
+
+app.use(cors({
+  origin: process.env.FRONTEND_URL || 'http://localhost:4321',
+  credentials: true
+}));
+
+app.use(bodyParser.urlencoded({extended:false}));
+
+app.use(express.static('public'));
+
+app.set("views", path.resolve(__dirname, "templates"));
+app.set("view engine", "ejs");
+app.set('trust proxy', 1);
 
 const requireLogin = (req, res, next) => {
   if (!req.session.user) {
@@ -43,11 +69,6 @@ const requireLogin = (req, res, next) => {
   }
   next();
 };
-
-app.set("views", path.resolve(__dirname, "templates"));
-app.set("view engine", "ejs");
-app.use(bodyParser.urlencoded({extended:false}));
-app.use(express.static('public'));
 
 
 
