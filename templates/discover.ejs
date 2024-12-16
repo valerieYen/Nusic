@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <link rel="stylesheet" href="/stylesheet.css">
+        <title>Discover</title>
+        <script>
+            function addSong() {
+                document.getElementById('addSongForm').submit();
+            }
+
+            function next() {
+                window.location.replace("/discover");
+            }
+        </script>
+    </head>
+
+    <body>
+        <div class="NavBar">
+            <div class="NavLeft">
+                <% if (user) { %>
+                    <p>Welcome, <span class="username"><em><%= user.username %></em></span></p>
+                <% } %>
+            </div>
+            <div class="Spacer"></div>
+            <div class="NavRight">
+                <!-- <a href="/home">Home</a> -->
+                <a href="/playlist">Playlist</a>
+                <a href="/discover">Discover</a>
+                <% if (user) { %>
+                    <a href="/logout">Logout</a>
+                <% } %>
+            </div>
+        </div>
+
+        <div class="PageContent">
+            <% if (song) { %>
+                <div class="discoverCard">
+                    <img src="<%= song.album.images[0].url %>" class="albumCvLg">
+                    <div class="songDetails">
+                        <h2 class="centeredText"><%= song.name %></h2>
+                        <p>Artist: <%= song.artists[0].name %></p>
+                        <p>Album: <%= song.album.name %></p>
+                        <p>Duration: <%= Math.floor(song.duration_ms / 1000 / 60) %>:<%= Math.floor((song.duration_ms / 1000) % 60).toString().padStart(2, '0') %></p>
+                    </div>
+                </div>
+                <form id="addSongForm" action="/discover" method="POST">
+                    <input type="hidden" name="songId" value="<%= song.id %>">
+                    <input type="hidden" name="userId" value="<%= user.username %>">
+                </form>
+            <% } %>
+
+            <div class="Options">
+                <button onclick="addSong()" class="optionBtn">❤</button>
+                <button onclick="next()" class="optionBtn">🗙</button>
+            </div>
+        </div>
+    </body>
+</html>

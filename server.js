@@ -6,6 +6,7 @@ const bodyParser = require("body-parser");
 const { MongoClient, ServerApiVersion } = require("mongodb");
 const { request } = require("http");
 const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
+const session = require('express-session');
 
 const username = encodeURIComponent(process.env.MONGO_DB_USERNAME);
 const password = encodeURIComponent(process.env.MONGO_DB_PASSWORD);
@@ -13,6 +14,23 @@ const dbName = process.env.MONGO_DB_NAME;
 const uri = `mongodb+srv://${username}:${password}@cluster0.allbk.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 const spotifyId = encodeURIComponent(process.env.SPOTIFY_CLIENT_ID);
 const spotifySecret = encodeURIComponent(process.env.SPOTIFY_CLIENT_SECRET);
+
+app.use(session({
+  secret: process.env.SESSION_SECRET,
+  resave: false,
+  saveUninitialized: false,
+  cookie: { 
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: 24 * 60 * 60 * 1000
+  }
+}));
+
+const requireLogin = (req, res, next) => {
+  if (!req.session.user) {
+    return res.redirect('/login');
+  }
+  next();
+};
 
 app.set("views", path.resolve(__dirname, "templates"));
 app.set("view engine", "ejs");
@@ -120,7 +138,6 @@ async function getRandomArtist(genre) {
       
       if (popularArtists.length > 0) {
         const randomArtist = popularArtists[Math.floor(Math.random() * popularArtists.length)];
-        console.log(`Found artist: ${randomArtist.name} (popularity: ${randomArtist.popularity})`);
         return randomArtist;
       }
     }
@@ -158,6 +175,32 @@ async function getSong(artistId) {
   }
 }
 
+async function getSongById(songId) {
+  try {
+    const tracksResponse = await fetch(
+      `https://api.spotify.com/v1/tracks/${songId}`,
+      {
+        headers: {
+          'Authorization': `Bearer ${app.locals.spotifyToken}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    if (!tracksResponse.ok) {
+      throw new Error(`HTTP error! status: ${tracksResponse.status}`);
+    }
+
+    const tracksData = await tracksResponse.json();
+    return tracksData;
+
+    return null;
+  } catch (error) {
+    console.error("Error fetching artist's top track:", error);
+    return null;
+  }
+}
+
 async function getRandomSong() {
   try {
     const artist = await getRandomArtist();
@@ -177,38 +220,7 @@ async function getRandomSong() {
   }
 }
 
-/**Other Shtuffs**/
-if (process.argv.length != 3) {
-  process.stdout.write("Usage server.js PORT_NUMBER");
-  process.exit(1);
-}
 
-const portNumber = parseInt(process.argv[2]);
-if (isNaN(portNumber) || portNumber < 1 || portNumber > 65535) {
-  console.error("Please provide a valid port number (1-65535)");
-  process.exit(1);
-}
-
-async function startServer() {
-  const connected = await connectToDatabase();
-  if (!connected) {
-    console.error("Failed to connect to database. Exiting...");
-    process.exit(1);
-  }
-
-  const spotifyToken = await authenticateSpotify();
-  if (!spotifyToken) {
-    console.error("Failed to authenticate with Spotify. Exiting...");
-    process.exit(1);
-  }
-  app.locals.spotifyToken = spotifyToken;
-
-  app.listen(portNumber, () => {
-    console.log(`Web server is running at http://localhost:${portNumber}/login`);
-    
-    promptUser();
-  });
-}
 
 /**express shit**/
 app.get("/login", (req, res) => {
@@ -221,15 +233,16 @@ app.post("/login", async (req, res) => {
   try {
       const user = await db.collection('users').findOne({ username: username });
       
-      if (!user) {
+      if (!user || password !== user.password) {
           return res.render('logIn', { error: 'Invalid username or password' });
       }
       
-      if (password !== user.password) {
-          return res.render('logIn', { error: 'Invalid username or password' });
-      }
+      req.session.user = {
+        username: user.username,
+        id: user._id
+      };
       
-      res.redirect('/home');
+      res.redirect('/discover');
   } catch (error) {
       console.error('Login error:', error);
       res.render('logIn', { error: 'An error occurred during login' });
@@ -266,10 +279,129 @@ app.post("/signup", async (req, res) => {
   }
 });
 
-app.get("/home", async (req, res) => {
+// app.get("/home", requireLogin, async (req, res) => {
+//   res.render('home', { user: req.session.user });
+// });
+
+app.get("/discover", requireLogin, async (req, res) => {
   const song = await getRandomSong("rnb");
-  res.render('home', { song: song });
+  res.render('discover', { 
+    song: song,
+    user: req.session.user 
+  });
 });
+
+app.post("/discover", requireLogin, async (req, res) => {
+  try {
+    const user = await db.collection('users').findOne({username: req.body.userId});
+    let playlist = user.playlist || [];
+    playlist.push(req.body.songId);
+
+    await db.collection('users').updateOne(
+      {username: req.body.userId}, 
+      {$set: {playlist: playlist}}
+    );
+
+  } catch (error) {
+    console.error('Add error:', error);
+  }
+
+  res.redirect('/discover');
+});
+
+app.get("/playlist", requireLogin, async (req, res) => {
+  let playlistDisplay = `<div>`;
+
+  try {
+    const user = await db.collection('users').findOne({username: req.session.user.username});
+    let playlist = user.playlist || [];
+
+    for (let i = 0; i < playlist.length; i++) {
+      let song = await getSongById(playlist[i]);
+      if (song && song.album) {
+        let albumCover = song.album.images[0].url;
+        let songName = song.name;
+        let artistName = song.artists[0].name;
+    
+        playlistDisplay += `
+          <div class="song-item">
+            <img src="${albumCover}" class="albumCvSm">
+            <p>${i + 1}) Song: ${songName} Artist: ${artistName}</p>
+            <form action="/delete-song" method="POST" onsubmit="return confirm('Are you sure you want to delete this song?');">
+              <input type="hidden" name="songId" value="${playlist[i]}">
+              <button type="submit" class="delete-btn">❌</button>
+            </form>
+            <br><br>
+          </div>
+        `;
+      }
+    }
+  } catch (error) {
+    console.error('Playlist error:', error);
+  }
+
+  playlistDisplay += '</div>';
+  res.render('playlistView', {playlist: playlistDisplay, user: req.session.user});
+});
+
+app.post("/delete-song", requireLogin, async (req, res) => {
+  try {
+    const songId = req.body.songId;
+    const username = req.session.user.username;
+    
+    await db.collection('users').updateOne(
+      { username: username },
+      { $pull: { playlist: songId } }
+    );
+    
+    res.redirect('/playlist');
+  } catch (error) {
+    console.error('Delete error:', error);
+    res.status(500).send('Error deleting song');
+  }
+});
+
+app.get('/logout', (req, res) => {
+  req.session.destroy();
+  res.redirect('/login');
+});
+
+
+
+/**Other Shtuffs**/
+if (process.argv.length != 3) {
+  process.stdout.write("Usage server.js PORT_NUMBER");
+  process.exit(1);
+}
+
+const portNumber = parseInt(process.argv[2]);
+if (isNaN(portNumber) || portNumber < 1 || portNumber > 65535) {
+  console.error("Please provide a valid port number (1-65535)");
+  process.exit(1);
+}
+
+async function startServer() {
+  const connected = await connectToDatabase();
+  if (!connected) {
+    console.error("Failed to connect to database. Exiting...");
+    process.exit(1);
+  }
+
+  const spotifyToken = await authenticateSpotify();
+  if (!spotifyToken) {
+    console.error("Failed to authenticate with Spotify. Exiting...");
+    process.exit(1);
+  }
+  app.locals.spotifyToken = spotifyToken;
+
+  app.listen(portNumber, () => {
+    console.log(`Web server is running at http://localhost:${portNumber}/login`);
+    
+    promptUser();
+  });
+}
+
+
 
 /**FOR TESTING USE ONLY, we will build this and will not need to do this**/
 function promptUser() {
