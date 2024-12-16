@@ -429,3 +429,8 @@ startServer().catch(console.error);
 const prompt = "Type stop to shutdown the server: ";
 process.stdout.write(prompt);
 process.stdin.setEncoding("utf8");
+
+const port = process.env.PORT || 3000; // Default to 3000 if PORT is not set
+app.listen(port, () => {
+  console.log(`Server is running on port ${port}`);
+});
