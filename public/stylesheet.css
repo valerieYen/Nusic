@@ -64,6 +64,8 @@ a:visited {
     max-width: 5rem;
     width: auto;
     height: auto;
+    border-radius: .25rem;
+    padding-right: 1rem;
 }
 
 .albumCvLg {
@@ -82,6 +84,10 @@ a:visited {
     color: #051014;
 }
 
+.songInfo {
+    background-color: #96b2ad;
+}
+
 .discoverCard {
     display: flex;
     flex-direction: column;
@@ -93,10 +99,6 @@ a:visited {
     justify-content: center;
     align-self: center;
     margin-top: 2rem;
-}
-
-
-.songDetails {
 }
 
 .Options {
@@ -121,6 +123,33 @@ a:visited {
     text-align: center;
 }
 
+.optionBtn.delete-btn {
+    margin: 0;
+    font-size: 2rem;
+    justify-self: flex-end;
+    padding: .5rem;
+    padding-top: 0;
+    margin-right: .5rem;
+    width: 3rem;
+}
+
 .centeredText {
     text-align: center;
+}
+
+.playlistDisplay {
+    padding: 1rem;
+}
+
+.song-item {
+    margin: 1rem 0;
+    padding: .5rem;
+    background-color: #96B2AD;
+    border-radius: .25rem;
+    display: flex;
+    flex-direction: row;
+}
+
+.yP {
+    background-color: #2e2f2f;
 }

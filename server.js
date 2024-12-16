@@ -310,7 +310,7 @@ app.post("/discover", requireLogin, async (req, res) => {
 });
 
 app.get("/playlist", requireLogin, async (req, res) => {
-  let playlistDisplay = `<div>`;
+  let playlistDisplay = `<div class="playlistDisplay">`;
 
   try {
     const user = await db.collection('users').findOne({username: req.session.user.username});
@@ -326,10 +326,11 @@ app.get("/playlist", requireLogin, async (req, res) => {
         playlistDisplay += `
           <div class="song-item">
             <img src="${albumCover}" class="albumCvSm">
-            <p>${i + 1}) Song: ${songName} Artist: ${artistName}</p>
+            <p class="songInfo">${i + 1}) Song: ${songName} Artist: ${artistName}</p>
+            <div class="Spacer"></div>
             <form action="/delete-song" method="POST" onsubmit="return confirm('Are you sure you want to delete this song?');">
               <input type="hidden" name="songId" value="${playlist[i]}">
-              <button type="submit" class="delete-btn">❌</button>
+              <button type="submit" class="delete-btn optionBtn">🗙</button>
             </form>
             <br><br>
           </div>
@@ -369,16 +370,12 @@ app.get('/logout', (req, res) => {
 
 
 /**Other Shtuffs**/
-if (process.argv.length != 3) {
-  process.stdout.write("Usage server.js PORT_NUMBER");
+if (process.argv.length != 2) {
+  process.stdout.write("Usage server.js");
   process.exit(1);
 }
 
-const portNumber = parseInt(process.argv[2]);
-if (isNaN(portNumber) || portNumber < 1 || portNumber > 65535) {
-  console.error("Please provide a valid port number (1-65535)");
-  process.exit(1);
-}
+const portNumber = process.env.PORT || 4321;
 
 async function startServer() {
   const connected = await connectToDatabase();
